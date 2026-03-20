@@ -6,3 +6,4 @@ data/browser_profiles/
 config/profile.yaml
 *.pdf
 .venv/
+venv/
