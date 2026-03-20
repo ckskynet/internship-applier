@@ -1,5 +1,6 @@
 """Load user profile and search configuration."""
 
+import glob
 import os
 import yaml
 
@@ -20,6 +21,16 @@ def get_education():
 
 
 def get_resume_path():
+    """Return the path to the resume PDF.
+
+    Looks for a PDF in the resume/ folder first. Falls back to the path
+    configured in profile.yaml.
+    """
+    resume_dir = os.path.join(os.path.dirname(__file__), "..", "resume")
+    pdfs = glob.glob(os.path.join(resume_dir, "*.pdf"))
+    if pdfs:
+        # Use the most recently modified PDF
+        return max(pdfs, key=os.path.getmtime)
     return load_profile()["resume"]["path"]
 
 
