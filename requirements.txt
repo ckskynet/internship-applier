@@ -7,3 +7,4 @@ sqlite-utils>=3.35
 anthropic>=0.39.0
 python-dotenv>=1.0.0
 flask>=3.0.0
+python-docx>=1.0.0

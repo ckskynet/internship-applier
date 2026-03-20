@@ -108,7 +108,24 @@ def generate_cover_letter(job_title, company, job_description, output_dir=None):
     prompt = f"""Write a professional, concise cover letter for the following internship position.
 Tailor it specifically to the job description and company. Keep it to 3-4 paragraphs.
 Do NOT include placeholders — use the provided information directly.
-Output ONLY the cover letter text, no extra commentary.
+Output ONLY the body paragraphs of the cover letter. Do NOT include any header, contact info,
+date, address block, or sign-off with contact details. Start directly with "Dear Hiring Manager,"
+or similar greeting and end with the closing line and your name only.
+Do NOT introduce yourself by name in the first paragraph (e.g. "My name is...") since the
+header already contains the applicant's name. Jump straight into why you are interested in
+the position and what makes you a good fit.
+
+WRITING STYLE RULES (strict):
+- Write like a real college student, not a corporate AI. Use natural, straightforward language.
+- NEVER use em dashes (—) or en dashes (–). Use commas, periods, or "and" instead.
+- NEVER use emojis or special unicode characters.
+- Avoid overused AI phrases: "passion for", "I am excited to", "I am thrilled", "I believe",
+  "cutting-edge", "leverage", "utilize", "furthermore", "in addition", "I am confident that",
+  "unique opportunity", "align with", "deeply", "eager".
+- Use simple, direct sentences. Vary sentence length. Don't start every sentence with "I".
+- Sound genuine and specific — reference actual details from the job description rather than
+  making generic statements about being a "team player" or having "strong communication skills".
+- Keep the tone professional but conversational, like an email you'd actually send.
 
 APPLICANT INFO:
 - Name: {personal.get('first_name', '')} {personal.get('last_name', '')}
@@ -138,20 +155,86 @@ Today's date: {datetime.now().strftime('%B %d, %Y')}
         )
         cover_letter_text = message.content[0].text
 
-        # Save to file
+        # Save to files
         if output_dir is None:
             output_dir = os.path.join(os.path.dirname(__file__), "..", "data", "cover_letters")
         os.makedirs(output_dir, exist_ok=True)
 
         safe_company = re.sub(r'[^\w\-]', '_', company)[:30]
-        filename = f"cover_letter_{safe_company}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        filepath = os.path.join(output_dir, filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        base_name = f"cover_letter_{safe_company}_{timestamp}"
 
-        with open(filepath, "w") as f:
+        # Save as .docx
+        docx_path = os.path.join(output_dir, f"{base_name}.docx")
+        _save_as_docx(cover_letter_text, docx_path, personal, job_title, company)
+
+        # Also save plain text for easy copying
+        txt_path = os.path.join(output_dir, f"{base_name}.txt")
+        with open(txt_path, "w") as f:
             f.write(cover_letter_text)
 
-        return filepath
+        return docx_path
 
     except Exception as e:
         print(f"  [!] Failed to generate cover letter: {e}")
         return None
+
+
+def _save_as_docx(text, filepath, personal, job_title, company):
+    """Save cover letter text as a formatted Word document."""
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    doc = Document()
+
+    # Set default font
+    style = doc.styles["Normal"]
+    font = style.font
+    font.name = "Calibri"
+    font.size = Pt(11)
+    style.paragraph_format.space_after = Pt(0)
+    style.paragraph_format.space_before = Pt(0)
+
+    # Set narrow margins
+    for section in doc.sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
+
+    # Header: name centered and bold
+    name = f"{personal.get('first_name', '')} {personal.get('last_name', '')}"
+    header_p = doc.add_paragraph()
+    header_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    header_run = header_p.add_run(name)
+    header_run.bold = True
+    header_run.font.size = Pt(14)
+
+    # Contact line below name
+    contact_parts = []
+    if personal.get("email"):
+        contact_parts.append(personal["email"])
+    if personal.get("phone"):
+        contact_parts.append(personal["phone"])
+    if personal.get("location"):
+        contact_parts.append(personal["location"])
+    if contact_parts:
+        contact_p = doc.add_paragraph()
+        contact_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        contact_run = contact_p.add_run(" | ".join(contact_parts))
+        contact_run.font.size = Pt(10)
+
+    # Date
+    date_p = doc.add_paragraph()
+    date_p.add_run(datetime.now().strftime("%B %d, %Y"))
+    date_p.paragraph_format.space_before = Pt(18)
+    date_p.paragraph_format.space_after = Pt(12)
+
+    # Body paragraphs — split on double newlines for proper spacing
+    paragraphs = [p.strip() for p in text.strip().split("\n\n") if p.strip()]
+    for para_text in paragraphs:
+        p = doc.add_paragraph(para_text)
+        p.paragraph_format.space_after = Pt(12)
+
+    doc.save(filepath)

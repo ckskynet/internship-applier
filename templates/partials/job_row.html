@@ -27,7 +27,6 @@
                     hx-post="/jobs/{{ job.id }}/apply"
                     hx-target="#job-{{ job.id }}"
                     hx-swap="outerHTML"
-                    hx-indicator="#spinner-{{ job.id }}"
                     title="Open browser, auto-fill resume and apply">
                 Apply
             </button>
@@ -35,12 +34,10 @@
                     hx-post="/jobs/{{ job.id }}/cover-letter"
                     hx-target="#cl-modal-body"
                     hx-swap="innerHTML"
-                    hx-indicator="#spinner-{{ job.id }}"
-                    onclick="document.getElementById('cl-modal').style.display='flex'"
+                    onclick="document.getElementById('cl-modal').style.display='flex';document.getElementById('cl-modal-body').innerHTML='<div class=\'cl-loading\'><div class=\'spinner\'></div><p>Generating cover letter with Claude...</p></div>'"
                     title="Generate cover letter with Claude">
                 CL
             </button>
-            <span class="htmx-indicator" id="spinner-{{ job.id }}">...</span>
             {% endif %}
         </div>
     </td>

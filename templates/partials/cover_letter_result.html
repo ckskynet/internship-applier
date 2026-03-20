@@ -9,9 +9,14 @@
     <pre class="cl-text">{{ cl_text }}</pre>
     <div class="cl-actions">
         <span class="cl-path">Saved to: {{ cl_path }}</span>
-        <button class="btn btn-apply" onclick="navigator.clipboard.writeText(document.querySelector('.cl-text').textContent);this.textContent='Copied!'">
-            Copy
-        </button>
+        <div style="display:flex;gap:0.5rem;">
+            <a href="/cover-letters/{{ docx_filename }}" class="btn btn-download" download>
+                Download .docx
+            </a>
+            <button class="btn btn-apply" onclick="navigator.clipboard.writeText(document.querySelector('.cl-text').textContent);this.textContent='Copied!'">
+                Copy text
+            </button>
+        </div>
     </div>
     {% elif error %}
     <p class="cl-error">{{ error }}</p>

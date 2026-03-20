@@ -295,6 +295,41 @@ td a:hover { text-decoration: underline; }
 }
 .cl-path { font-size: 0.7rem; color: var(--text-dim); }
 .cl-error { color: var(--red); font-size: 0.85rem; }
+.btn-download {
+    background: rgba(74,158,255,0.15);
+    color: var(--blue);
+    border-color: rgba(74,158,255,0.3);
+    text-decoration: none;
+}
+.btn-download:hover { background: rgba(74,158,255,0.3); }
+
+/* Loading spinner */
+.cl-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 3rem 1rem;
+    color: var(--text-dim);
+}
+.spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Apply button loading state */
+.btn-apply.htmx-request {
+    opacity: 0.6;
+    pointer-events: none;
+}
+.btn-apply.htmx-request::after {
+    content: "...";
+}
 
 /* Row states */
 tr.row-applied { opacity: 0.6; }

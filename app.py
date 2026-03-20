@@ -1,8 +1,9 @@
 """Flask web UI for the Internship Applier."""
 
 import math
+import os
 import threading
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from utils.database import (
     init_db, get_jobs_paginated, get_job_by_id, get_stats,
     update_job_status,
@@ -82,22 +83,21 @@ def update_status(job_id):
 
 @app.route("/jobs/<int:job_id>/apply", methods=["POST"])
 def apply_job(job_id):
-    """One-click apply: opens browser, fills form fields, uploads resume."""
+    """Open job URL in default browser and mark as applied."""
+    import subprocess
     job = get_job_by_id(job_id)
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    from automation.applier import apply_to_job_web
+    # Use cmd.exe on WSL to open in the Windows default browser
+    try:
+        subprocess.Popen(["cmd.exe", "/c", "start", job["url"]],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        import webbrowser
+        webbrowser.open(job["url"])
 
-    # Run in a background thread so the browser opens without blocking the response
-    def _run_apply():
-        apply_to_job_web(job)
-
-    thread = threading.Thread(target=_run_apply, daemon=True)
-    thread.start()
-
-    # Mark as applied immediately in the UI
-    update_job_status(job_id, "applied", "auto-applied via web UI")
+    update_job_status(job_id, "applied")
     job = get_job_by_id(job_id)
     job = _enrich_job(job)
     return render_template("partials/job_row.html", job=job)
@@ -127,15 +127,29 @@ def generate_cover_letter_route(job_id):
     )
 
     if cl_path:
-        # Read the generated cover letter to show in the modal
-        with open(cl_path, "r") as f:
+        # Read the .txt version for display (same base name, .txt extension)
+        txt_path = cl_path.replace(".docx", ".txt")
+        with open(txt_path, "r") as f:
             cl_text = f.read()
+        # Pass the docx filename for the download link
+        docx_filename = os.path.basename(cl_path)
         return render_template("partials/cover_letter_result.html",
-                               job=job, cl_status=cl_status, cl_text=cl_text, cl_path=cl_path)
+                               job=job, cl_status=cl_status, cl_text=cl_text,
+                               cl_path=cl_path, docx_filename=docx_filename)
     else:
         return render_template("partials/cover_letter_result.html",
                                job=job, cl_status=cl_status, cl_text=None, cl_path=None,
                                error="Failed to generate cover letter. Check ANTHROPIC_API_KEY.")
+
+
+@app.route("/cover-letters/<path:filename>")
+def download_cover_letter(filename):
+    """Serve a generated cover letter file for download."""
+    cl_dir = os.path.join(os.path.dirname(__file__), "data", "cover_letters")
+    filepath = os.path.join(cl_dir, filename)
+    if not os.path.isfile(filepath):
+        return "File not found", 404
+    return send_file(filepath, as_attachment=True)
 
 
 if __name__ == "__main__":
