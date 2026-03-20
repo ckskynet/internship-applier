@@ -145,7 +145,7 @@ def cmd_analyze():
         table.add_column("Rec", width=6)
         table.add_column("Title", width=35)
         table.add_column("Company", width=20)
-        table.add_column("Summary", width=50)
+        table.add_column("URL")
 
         for r in results[:15]:
             score = r.get("fit_score", 0)
@@ -158,7 +158,7 @@ def cmd_analyze():
                 f"[{rec_style}]{r.get('recommendation', '?')}[/{rec_style}]",
                 r["title"][:35],
                 r["company"][:20],
-                r.get("summary", "")[:50],
+                f"[link={r['url']}]{r['url'][:60]}[/link]",
             )
         console.print(table)
 

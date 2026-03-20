@@ -4,7 +4,7 @@ Semi-automated tool for searching and applying to internship listings across mul
 
 ## Features
 
-- **Multi-platform scraping** — Indeed, ZipRecruiter, and Handshake
+- **Multi-platform scraping** — Indeed, ZipRecruiter, Handshake, Remote OK, and We Work Remotely
 - **AI fit analysis** — scores jobs 1-10 using Claude with strengths, gaps, and talking points
 - **SQLite tracking** — deduplicates listings and tracks application status
 - **Semi-automated applications** — walks you through each listing ranked by fit score, with options to apply, skip, or open in browser
@@ -56,6 +56,8 @@ platforms:
   indeed: true
   ziprecruiter: true
   handshake: false
+  remoteok: true
+  weworkremotely: true
 ```
 
 Create a `.env` file for API keys:
@@ -110,8 +112,8 @@ Pulls latest changes, installs dependencies, and logs the update to `logs/update
 
 ## How It Works
 
-1. **`search`** scrapes job boards using Playwright, saves listings to a local SQLite database, and sends a Discord summary
-2. **`analyze`** runs each unscored job through Claude to produce a fit score (1-10), recommendation (apply/skip/maybe), talking points, strengths, and gaps
+1. **`search`** scrapes job boards (Indeed, ZipRecruiter, Handshake via Playwright; Remote OK via JSON API; We Work Remotely via RSS), saves listings to a local SQLite database, and sends a Discord summary
+2. **`analyze`** runs each unscored job through Claude to produce a fit score (1-10), recommendation (apply/skip/maybe), talking points, strengths, and gaps — results include clickable job links
 3. **`apply`** iterates through new listings sorted by fit score — for each job you can:
    - **apply** — opens the listing and pre-fills your application (name, email, resume, cover letter)
    - **open** — opens in browser for manual application

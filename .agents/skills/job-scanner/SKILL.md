@@ -1,6 +1,6 @@
 # Job Scanner
 
-Job search and AI fit analysis tool for internship applications. Scrapes listings from Indeed, ZipRecruiter, and Handshake, then runs AI-powered fit scoring to rank opportunities.
+Job search and AI fit analysis tool for internship applications. Scrapes listings from Indeed, ZipRecruiter, Handshake, Remote OK, and We Work Remotely, then runs AI-powered fit scoring to rank opportunities.
 
 ## Commands
 
