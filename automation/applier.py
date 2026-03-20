@@ -177,3 +177,94 @@ def apply_to_job(job):
 
         finally:
             browser.close()
+
+
+def apply_to_job_web(job):
+    """Open a job listing from the web UI, pre-fill the application.
+
+    Non-blocking version — opens browser and returns result dict immediately
+    after filling. User reviews and submits in the browser on their own.
+    """
+    personal = get_personal_info()
+    education = get_education()
+    resume_path = get_resume_path()
+
+    result = {
+        "filled_count": 0,
+        "resume_uploaded": False,
+        "cover_letter": None,
+        "cover_letter_status": "none",
+        "error": None,
+    }
+
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+
+            page.goto(job["url"], wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(2000)
+
+            # Look for "Apply" button and click it
+            apply_btn = page.query_selector(
+                'a:has-text("Apply"), button:has-text("Apply"), '
+                '[class*="apply"], [data-testid*="apply"]'
+            )
+            if apply_btn:
+                apply_btn.click()
+                page.wait_for_timeout(2000)
+
+            # Try to fill visible form fields
+            inputs = page.query_selector_all(
+                'input[type="text"], input[type="email"], input[type="tel"], '
+                'input[type="url"], input:not([type])'
+            )
+            for inp in inputs:
+                if inp.is_visible():
+                    if _try_fill_field(page, inp, personal, education):
+                        result["filled_count"] += 1
+
+            # Try to upload resume
+            result["resume_uploaded"] = _try_upload_resume(page, resume_path)
+
+            # Check cover letter status
+            cl_status = scan_page_for_cover_letter(page)
+            result["cover_letter_status"] = cl_status
+
+            if cl_status == "required":
+                body_text = page.inner_text("body")
+                cl_path = generate_cover_letter(
+                    job_title=job["title"],
+                    company=job["company"],
+                    job_description=body_text[:5000],
+                )
+                if cl_path:
+                    result["cover_letter"] = cl_path
+                    _try_upload_cover_letter(page, cl_path)
+
+            # Don't close — leave browser open for user to review and submit
+            # Browser will stay open until user closes it manually
+            input()  # Block until user presses Enter in the terminal
+
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
+
+
+def fetch_job_description(url):
+    """Fetch the text content of a job posting page for cover letter generation."""
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(2000)
+            text = page.inner_text("body")
+            browser.close()
+            return text[:8000]
+    except Exception as e:
+        return f"Error fetching job page: {e}"

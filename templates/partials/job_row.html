@@ -13,13 +13,35 @@
         <span class="badge badge-{{ job.status }}">{{ job.status }}</span>
     </td>
     <td>
-        <form hx-post="/jobs/{{ job.id }}/status" hx-target="#job-{{ job.id }}" hx-swap="outerHTML">
-            <select name="status" class="status-select" onchange="this.form.requestSubmit()">
-                <option value="new" {% if job.status == 'new' %}selected{% endif %}>New</option>
-                <option value="applied" {% if job.status == 'applied' %}selected{% endif %}>Applied</option>
-                <option value="skipped" {% if job.status == 'skipped' %}selected{% endif %}>Skipped</option>
-                <option value="error" {% if job.status == 'error' %}selected{% endif %}>Error</option>
-            </select>
-        </form>
+        <div class="action-group">
+            <form hx-post="/jobs/{{ job.id }}/status" hx-target="#job-{{ job.id }}" hx-swap="outerHTML">
+                <select name="status" class="status-select" onchange="this.form.requestSubmit()">
+                    <option value="new" {% if job.status == 'new' %}selected{% endif %}>New</option>
+                    <option value="applied" {% if job.status == 'applied' %}selected{% endif %}>Applied</option>
+                    <option value="skipped" {% if job.status == 'skipped' %}selected{% endif %}>Skipped</option>
+                    <option value="error" {% if job.status == 'error' %}selected{% endif %}>Error</option>
+                </select>
+            </form>
+            {% if job.status == 'new' %}
+            <button class="btn btn-apply"
+                    hx-post="/jobs/{{ job.id }}/apply"
+                    hx-target="#job-{{ job.id }}"
+                    hx-swap="outerHTML"
+                    hx-indicator="#spinner-{{ job.id }}"
+                    title="Open browser, auto-fill resume and apply">
+                Apply
+            </button>
+            <button class="btn btn-cl"
+                    hx-post="/jobs/{{ job.id }}/cover-letter"
+                    hx-target="#cl-modal-body"
+                    hx-swap="innerHTML"
+                    hx-indicator="#spinner-{{ job.id }}"
+                    onclick="document.getElementById('cl-modal').style.display='flex'"
+                    title="Generate cover letter with Claude">
+                CL
+            </button>
+            <span class="htmx-indicator" id="spinner-{{ job.id }}">...</span>
+            {% endif %}
+        </div>
     </td>
 </tr>
