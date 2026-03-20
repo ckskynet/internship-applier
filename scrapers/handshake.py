@@ -52,8 +52,8 @@ def scrape_listings(keyword, location="", posted_within_days=7, max_pages=5):
 
         print("[Handshake] Scraping listings...")
 
-        # Navigate to job search
-        search_url = "https://app.joinhandshake.com/job-search?page=1&per_page=25&sort_direction=desc&sort_column=default"
+        # Navigate to job search — jobType=3 filters to internships only
+        search_url = "https://app.joinhandshake.com/job-search?page=1&per_page=25&sort_direction=desc&sort_column=default&jobType=3"
         if keyword:
             search_url += f"&keywords={quote_plus(keyword)}"
 

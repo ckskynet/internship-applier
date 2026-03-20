@@ -45,11 +45,15 @@ def _normalize_url(url):
         params = parse_qs(parsed.query)
         if "jk" in params:
             return f"{parsed.scheme}://{parsed.netloc}/viewjob?jk={params['jk'][0]}"
-    # For ZipRecruiter, normalize on the lk (listing key) param
+    # For ZipRecruiter, keep search + location + lk params (lk needs search context to work)
     if "ziprecruiter.com" in parsed.netloc:
         params = parse_qs(parsed.query)
         if "lk" in params:
-            return f"{parsed.scheme}://{parsed.netloc}/jobs-search?lk={params['lk'][0]}"
+            kept = {}
+            for key in ("search", "location", "lk"):
+                if key in params:
+                    kept[key] = params[key][0]
+            return f"{parsed.scheme}://{parsed.netloc}/jobs-search?{urlencode(kept)}"
         return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
     return url
 
@@ -63,7 +67,21 @@ def _is_duplicate(conn, platform, title, company):
     return row is not None
 
 
+def _is_excluded_title(title):
+    """Check if a job title matches any excluded keywords from config."""
+    try:
+        from utils.config import get_search_prefs
+        prefs = get_search_prefs()
+        excludes = prefs.get("exclude_title_keywords", [])
+        title_lower = title.lower()
+        return any(kw.lower() in title_lower for kw in excludes)
+    except Exception:
+        return False
+
+
 def insert_job(platform, title, company, location, url, description="", date_posted=""):
+    if _is_excluded_title(title):
+        return
     conn = get_connection()
     try:
         url = _normalize_url(url)
