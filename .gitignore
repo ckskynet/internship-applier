@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+data/applications.db
+data/browser_profiles/
+config/profile.yaml
+*.pdf
+.venv/
