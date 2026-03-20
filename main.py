@@ -10,7 +10,10 @@ from rich.table import Table
 from rich.prompt import Prompt, Confirm
 
 from utils.config import load_profile, get_search_prefs, get_enabled_platforms
-from utils.database import init_db, get_jobs, update_job_status, is_already_applied
+from utils.database import (
+    init_db, get_jobs, update_job_status, is_already_applied,
+    update_job_analysis, get_unanalyzed_jobs,
+)
 from scrapers import indeed, ziprecruiter, handshake
 from automation.applier import apply_to_job
 from utils.discord import send_search_summary, send_application_update
@@ -105,12 +108,71 @@ def cmd_list(status=None):
     console.print(table)
 
 
+def cmd_analyze():
+    """Run AI fit analysis on all unanalyzed new jobs."""
+    from utils.ai_analyzer import analyze_job_fit
+
+    jobs = get_unanalyzed_jobs()
+    if not jobs:
+        console.print("[yellow]No unanalyzed jobs found. Run 'search' first.[/yellow]")
+        return
+
+    console.print(f"\n[bold]Analyzing {len(jobs)} jobs...[/bold]\n")
+
+    results = []
+    for i, job in enumerate(jobs, 1):
+        console.print(f"  [{i}/{len(jobs)}] {job['title'][:40]} @ {job['company'][:20]}...", end=" ")
+        analysis = analyze_job_fit(job)
+        if analysis:
+            update_job_analysis(job["id"], analysis)
+            score = analysis.get("fit_score", 0)
+            rec = analysis.get("recommendation", "?")
+            score_style = "green" if score >= 7 else "yellow" if score >= 4 else "red"
+            console.print(f"[{score_style}]{score}/10[/{score_style}] [{rec}]")
+            results.append({**job, **analysis})
+        else:
+            console.print("[red]failed[/red]")
+
+    # Print ranked summary
+    results.sort(key=lambda x: x.get("fit_score", 0), reverse=True)
+    if results:
+        console.print(f"\n[bold]Top Matches[/bold]\n")
+        table = Table()
+        table.add_column("Score", width=6, justify="center")
+        table.add_column("Rec", width=6)
+        table.add_column("Title", width=35)
+        table.add_column("Company", width=20)
+        table.add_column("Summary", width=50)
+
+        for r in results[:15]:
+            score = r.get("fit_score", 0)
+            score_style = "green" if score >= 7 else "yellow" if score >= 4 else "red"
+            rec_style = {"apply": "green", "maybe": "yellow", "skip": "dim"}.get(
+                r.get("recommendation", ""), "white"
+            )
+            table.add_row(
+                f"[{score_style}]{score}/10[/{score_style}]",
+                f"[{rec_style}]{r.get('recommendation', '?')}[/{rec_style}]",
+                r["title"][:35],
+                r["company"][:20],
+                r.get("summary", "")[:50],
+            )
+        console.print(table)
+
+    console.print(f"\n[bold green]Analysis complete: {len(results)}/{len(jobs)} jobs scored.[/bold green]")
+
+
 def cmd_apply():
     """Walk through new listings and apply semi-automatically."""
+    import json as _json
+
     jobs = get_jobs(status="new")
     if not jobs:
         console.print("[yellow]No new jobs to apply to. Run 'search' first.[/yellow]")
         return
+
+    # Sort by AI fit score descending (unscored jobs last)
+    jobs.sort(key=lambda j: j.get("ai_fit_score") or 0, reverse=True)
 
     console.print(f"\n[bold]Found {len(jobs)} new listings to review.[/bold]\n")
 
@@ -128,6 +190,37 @@ def cmd_apply():
         console.print(f"  Location: {job['location']}")
         console.print(f"  Platform: {job['platform']}")
         console.print(f"  URL:      {job['url']}")
+
+        # Show AI analysis if available
+        if job.get("ai_fit_score"):
+            score = job["ai_fit_score"]
+            score_style = "green" if score >= 7 else "yellow" if score >= 4 else "red"
+            rec = job.get("ai_recommendation", "?")
+            rec_style = {"apply": "green", "maybe": "yellow", "skip": "dim"}.get(rec, "white")
+
+            console.print(f"\n  [bold]AI Analysis:[/bold]")
+            console.print(f"  Fit Score:       [{score_style}]{score}/10[/{score_style}]")
+            console.print(f"  Recommendation:  [{rec_style}]{rec}[/{rec_style}]")
+            if job.get("ai_summary"):
+                console.print(f"  Summary:         {job['ai_summary']}")
+
+            if job.get("ai_talking_points"):
+                try:
+                    tp_data = _json.loads(job["ai_talking_points"])
+                    if tp_data.get("talking_points"):
+                        console.print(f"  [bold]Talking Points:[/bold]")
+                        for tp in tp_data["talking_points"]:
+                            console.print(f"    - {tp}")
+                    if tp_data.get("strengths"):
+                        console.print(f"  [bold]Strengths:[/bold]")
+                        for s in tp_data["strengths"]:
+                            console.print(f"    [green]+ {s}[/green]")
+                    if tp_data.get("gaps"):
+                        console.print(f"  [bold]Gaps:[/bold]")
+                        for g in tp_data["gaps"]:
+                            console.print(f"    [yellow]- {g}[/yellow]")
+                except (_json.JSONDecodeError, TypeError):
+                    pass
 
         action = Prompt.ask(
             "\n  Action",
@@ -209,6 +302,7 @@ def main():
         console.print()
         console.print("Commands:")
         console.print("  search  — Scrape job listings from enabled platforms")
+        console.print("  analyze — Run AI fit analysis on unanalyzed jobs")
         console.print("  list    — Show all saved listings")
         console.print("  new     — Show only new (unapplied) listings")
         console.print("  apply   — Walk through new listings and apply")
@@ -220,6 +314,7 @@ def main():
 
     commands = {
         "search": cmd_search,
+        "analyze": cmd_analyze,
         "list": cmd_list,
         "new": lambda: cmd_list(status="new"),
         "apply": cmd_apply,

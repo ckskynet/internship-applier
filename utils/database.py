@@ -1,5 +1,6 @@
 """SQLite database for tracking job listings and application status."""
 
+import json
 import sqlite3
 import os
 from datetime import datetime
@@ -30,9 +31,24 @@ def init_db():
             date_scraped TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'new',
             date_applied TEXT,
-            notes TEXT
+            notes TEXT,
+            ai_fit_score INTEGER,
+            ai_recommendation TEXT,
+            ai_summary TEXT,
+            ai_talking_points TEXT
         )
     """)
+    # Add AI columns to existing databases
+    for col, col_type in [
+        ("ai_fit_score", "INTEGER"),
+        ("ai_recommendation", "TEXT"),
+        ("ai_summary", "TEXT"),
+        ("ai_talking_points", "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
     conn.commit()
     conn.close()
 
@@ -188,3 +204,43 @@ def update_job_status(job_id, status, notes=""):
     )
     conn.commit()
     conn.close()
+
+
+def update_job_analysis(job_id, analysis):
+    """Store AI fit analysis results for a job.
+
+    Args:
+        job_id: The job's database ID
+        analysis: dict with keys fit_score, recommendation, summary, talking_points,
+                  strengths, gaps
+    """
+    conn = get_connection()
+    # Store talking_points, strengths, and gaps together as JSON
+    talking_points_data = json.dumps({
+        "talking_points": analysis.get("talking_points", []),
+        "strengths": analysis.get("strengths", []),
+        "gaps": analysis.get("gaps", []),
+    })
+    conn.execute(
+        """UPDATE jobs SET ai_fit_score = ?, ai_recommendation = ?,
+           ai_summary = ?, ai_talking_points = ? WHERE id = ?""",
+        (
+            analysis.get("fit_score"),
+            analysis.get("recommendation"),
+            analysis.get("summary"),
+            talking_points_data,
+            job_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_unanalyzed_jobs():
+    """Get all new jobs that haven't been analyzed yet."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM jobs WHERE status = 'new' AND ai_fit_score IS NULL ORDER BY date_scraped DESC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
