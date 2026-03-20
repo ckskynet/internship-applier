@@ -14,7 +14,7 @@ from utils.database import (
     init_db, get_jobs, update_job_status, is_already_applied,
     update_job_analysis, get_unanalyzed_jobs,
 )
-from scrapers import indeed, ziprecruiter, handshake
+from scrapers import indeed, ziprecruiter, handshake, remoteok, weworkremotely
 from automation.applier import apply_to_job
 from utils.discord import send_search_summary, send_application_update
 
@@ -23,6 +23,8 @@ console = Console()
 SCRAPER_MAP = {
     "indeed": indeed.scrape_listings,
     "ziprecruiter": ziprecruiter.scrape_listings,
+    "remoteok": remoteok.scrape_listings,
+    "weworkremotely": weworkremotely.scrape_listings,
     "handshake": handshake.scrape_listings,
 }
 
@@ -47,8 +49,9 @@ def cmd_search():
 
         console.print(f"[cyan]Scraping {platform}...[/cyan]")
         platform_jobs = []
-        # Handshake doesn't support location filtering — search by keyword only
-        locations = [""] if platform == "handshake" else prefs["locations"]
+        # These platforms don't support location filtering — search by keyword only
+        no_location = ("handshake", "remoteok", "weworkremotely")
+        locations = [""] if platform in no_location else prefs["locations"]
         for keyword in prefs["keywords"]:
             for location in locations:
                 try:
