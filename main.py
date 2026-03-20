@@ -44,8 +44,10 @@ def cmd_search():
 
         console.print(f"[cyan]Scraping {platform}...[/cyan]")
         platform_jobs = []
+        # Handshake doesn't support location filtering — search by keyword only
+        locations = [""] if platform == "handshake" else prefs["locations"]
         for keyword in prefs["keywords"]:
-            for location in prefs["locations"]:
+            for location in locations:
                 try:
                     jobs = scraper(
                         keyword=keyword,
@@ -54,7 +56,10 @@ def cmd_search():
                     )
                     platform_jobs.extend(jobs)
                     total += len(jobs)
-                    console.print(f"  Found {len(jobs)} listings for '{keyword}' in '{location}'")
+                    if location:
+                        console.print(f"  Found {len(jobs)} listings for '{keyword}' in '{location}'")
+                    else:
+                        console.print(f"  Found {len(jobs)} listings for '{keyword}'")
                 except Exception as e:
                     console.print(f"  [red]Error: {e}[/red]")
         jobs_by_platform[platform] = platform_jobs
@@ -171,6 +176,29 @@ def cmd_stats():
         console.print(f"  {platform}: {count}")
 
 
+def cmd_export():
+    """Export all job listings to a CSV file."""
+    import csv
+    import os
+
+    jobs = get_jobs()
+    if not jobs:
+        console.print("[yellow]No jobs to export.[/yellow]")
+        return
+
+    os.makedirs("data", exist_ok=True)
+    out_path = "data/jobs_export.csv"
+    fields = ["id", "platform", "title", "company", "location", "url",
+              "status", "date_scraped", "date_applied", "notes"]
+
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(jobs)
+
+    console.print(f"[bold green]Exported {len(jobs)} jobs to {out_path}[/bold green]")
+
+
 def main():
     init_db()
 
@@ -185,6 +213,7 @@ def main():
         console.print("  new     — Show only new (unapplied) listings")
         console.print("  apply   — Walk through new listings and apply")
         console.print("  stats   — Show application statistics")
+        console.print("  export  — Export all listings to data/jobs_export.csv")
         return
 
     command = sys.argv[1].lower()
@@ -195,6 +224,7 @@ def main():
         "new": lambda: cmd_list(status="new"),
         "apply": cmd_apply,
         "stats": cmd_stats,
+        "export": cmd_export,
     }
 
     if command in commands:
