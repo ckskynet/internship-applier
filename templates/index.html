@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Stats -->
+<div class="stats-bar">
+    <div class="stat-card">
+        <div class="number">{{ stats.total }}</div>
+        <div class="label">Total</div>
+    </div>
+    <div class="stat-card">
+        <div class="number" style="color:var(--blue)">{{ stats.by_status.get('new', 0) }}</div>
+        <div class="label">New</div>
+    </div>
+    <div class="stat-card">
+        <div class="number" style="color:var(--green)">{{ stats.by_status.get('applied', 0) }}</div>
+        <div class="label">Applied</div>
+    </div>
+    <div class="stat-card">
+        <div class="number" style="color:var(--gray)">{{ stats.by_status.get('skipped', 0) }}</div>
+        <div class="label">Skipped</div>
+    </div>
+    <div class="stat-card">
+        <div class="number" style="color:var(--red)">{{ stats.by_status.get('error', 0) }}</div>
+        <div class="label">Errors</div>
+    </div>
+    {% for p, count in stats.by_platform.items() %}
+    <div class="stat-card">
+        <div class="number">{{ count }}</div>
+        <div class="label">{{ p }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Filters -->
+<div class="filters">
+    <span style="font-size:0.75rem;color:var(--text-dim);margin-right:0.25rem;">Platform:</span>
+    <div class="filter-group">
+        <a href="/?status={{ current_status }}&search={{ current_search }}"
+           class="filter-btn {% if not current_platform %}active{% endif %}">All</a>
+        {% for p in ['indeed', 'ziprecruiter', 'handshake'] %}
+        <a href="/?platform={{ p }}&status={{ current_status }}&search={{ current_search }}"
+           class="filter-btn {% if current_platform == p %}active{% endif %}">{{ p|capitalize }}</a>
+        {% endfor %}
+    </div>
+
+    <span style="font-size:0.75rem;color:var(--text-dim);margin-left:0.75rem;margin-right:0.25rem;">Status:</span>
+    <div class="filter-group">
+        <a href="/?platform={{ current_platform }}&search={{ current_search }}"
+           class="filter-btn {% if not current_status %}active{% endif %}">All</a>
+        {% for s in ['new', 'applied', 'skipped', 'error'] %}
+        <a href="/?status={{ s }}&platform={{ current_platform }}&search={{ current_search }}"
+           class="filter-btn {% if current_status == s %}active{% endif %}">{{ s|capitalize }}</a>
+        {% endfor %}
+    </div>
+
+    <form action="/" method="get" style="margin-left:auto;display:flex;gap:0.5rem;">
+        <input type="hidden" name="platform" value="{{ current_platform }}">
+        <input type="hidden" name="status" value="{{ current_status }}">
+        <input type="text" name="search" class="search-input" placeholder="Search title or company..."
+               value="{{ current_search }}">
+    </form>
+</div>
+
+<!-- Table -->
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Platform</th>
+                <th>Title</th>
+                <th>Company</th>
+                <th>Location</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="job-table-body">
+            {% for job in jobs %}
+                {% include "partials/job_row.html" %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="pagination">
+    <div>
+        Page {{ page }} of {{ total_pages }} ({{ total_count }} jobs)
+    </div>
+    <div style="display:flex;gap:0.5rem;">
+        <a href="/?page={{ page - 1 }}&platform={{ current_platform }}&status={{ current_status }}&search={{ current_search }}"
+           class="page-btn {% if page <= 1 %}disabled{% endif %}">Prev</a>
+        <a href="/?page={{ page + 1 }}&platform={{ current_platform }}&status={{ current_status }}&search={{ current_search }}"
+           class="page-btn {% if page >= total_pages %}disabled{% endif %}">Next</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

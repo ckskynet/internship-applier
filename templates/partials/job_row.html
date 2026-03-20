@@ -1,0 +1,25 @@
+<tr class="row-{{ job.status }}" id="job-{{ job.id }}">
+    <td><span class="platform platform-{{ job.platform }}">{{ job.platform }}</span></td>
+    <td>
+        <a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a>
+        {% if job.status == 'new' and job._applied_elsewhere %}
+            <span class="badge badge-warning">applied elsewhere</span>
+        {% endif %}
+    </td>
+    <td class="company">{{ job.company }}</td>
+    <td class="location">{{ job.location or '' }}</td>
+    <td class="date">{{ job.date_scraped[:10] if job.date_scraped else '' }}</td>
+    <td>
+        <span class="badge badge-{{ job.status }}">{{ job.status }}</span>
+    </td>
+    <td>
+        <form hx-post="/jobs/{{ job.id }}/status" hx-target="#job-{{ job.id }}" hx-swap="outerHTML">
+            <select name="status" class="status-select" onchange="this.form.requestSubmit()">
+                <option value="new" {% if job.status == 'new' %}selected{% endif %}>New</option>
+                <option value="applied" {% if job.status == 'applied' %}selected{% endif %}>Applied</option>
+                <option value="skipped" {% if job.status == 'skipped' %}selected{% endif %}>Skipped</option>
+                <option value="error" {% if job.status == 'error' %}selected{% endif %}>Error</option>
+            </select>
+        </form>
+    </td>
+</tr>

@@ -108,6 +108,59 @@ def is_already_applied(title, company):
     return row is not None
 
 
+def get_job_by_id(job_id):
+    """Fetch a single job by ID."""
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_stats():
+    """Return status and platform counts."""
+    conn = get_connection()
+    status_counts = conn.execute(
+        "SELECT status, COUNT(*) as count FROM jobs GROUP BY status"
+    ).fetchall()
+    platform_counts = conn.execute(
+        "SELECT platform, COUNT(*) as count FROM jobs GROUP BY platform"
+    ).fetchall()
+    conn.close()
+    return {
+        "by_status": {r["status"]: r["count"] for r in status_counts},
+        "by_platform": {r["platform"]: r["count"] for r in platform_counts},
+        "total": sum(r["count"] for r in status_counts),
+    }
+
+
+def get_jobs_paginated(status=None, platform=None, search=None, page=1, per_page=50):
+    """Fetch jobs with pagination and optional filters."""
+    conn = get_connection()
+    query = "SELECT * FROM jobs WHERE 1=1"
+    count_query = "SELECT COUNT(*) FROM jobs WHERE 1=1"
+    params = []
+    if status:
+        query += " AND status = ?"
+        count_query += " AND status = ?"
+        params.append(status)
+    if platform:
+        query += " AND platform = ?"
+        count_query += " AND platform = ?"
+        params.append(platform)
+    if search:
+        query += " AND (LOWER(title) LIKE ? OR LOWER(company) LIKE ?)"
+        count_query += " AND (LOWER(title) LIKE ? OR LOWER(company) LIKE ?)"
+        term = f"%{search.lower()}%"
+        params.extend([term, term])
+    query += " ORDER BY date_scraped DESC LIMIT ? OFFSET ?"
+
+    total = conn.execute(count_query, params).fetchone()[0]
+    params.extend([per_page, (page - 1) * per_page])
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows], total
+
+
 def update_job_status(job_id, status, notes=""):
     conn = get_connection()
     now = datetime.now().isoformat() if status == "applied" else None
