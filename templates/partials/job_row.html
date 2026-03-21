@@ -1,5 +1,5 @@
 <tr class="row-{{ job.status }}" id="job-{{ job.id }}">
-    <td><span class="platform platform-{{ job.platform }}">{{ job.platform }}</span></td>
+    <td><span class="platform platform-{{ job.platform }}">{{ job.platform|platform_name }}</span></td>
     <td>
         <a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a>
         {% if job.status == 'new' and job._applied_elsewhere %}

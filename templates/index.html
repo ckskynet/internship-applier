@@ -26,7 +26,7 @@
     {% for p, count in stats.by_platform.items() %}
     <div class="stat-card">
         <div class="number">{{ count }}</div>
-        <div class="label">{{ p }}</div>
+        <div class="label">{{ p|platform_name }}</div>
     </div>
     {% endfor %}
 </div>
@@ -37,9 +37,9 @@
     <div class="filter-group">
         <a href="/?status={{ current_status }}&search={{ current_search }}"
            class="filter-btn {% if not current_platform %}active{% endif %}">All</a>
-        {% for p in ['indeed', 'ziprecruiter', 'handshake'] %}
+        {% for p in ['indeed', 'ziprecruiter', 'handshake', 'remoteok', 'weworkremotely'] %}
         <a href="/?platform={{ p }}&status={{ current_status }}&search={{ current_search }}"
-           class="filter-btn {% if current_platform == p %}active{% endif %}">{{ p|capitalize }}</a>
+           class="filter-btn {% if current_platform == p %}active{% endif %}">{{ p|platform_name }}</a>
         {% endfor %}
     </div>
 

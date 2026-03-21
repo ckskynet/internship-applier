@@ -13,6 +13,19 @@ app = Flask(__name__)
 
 PER_PAGE = 50
 
+PLATFORM_NAMES = {
+    "indeed": "Indeed",
+    "ziprecruiter": "ZipRecruiter",
+    "handshake": "Handshake",
+    "remoteok": "Remote OK",
+    "weworkremotely": "WWR",
+}
+
+
+@app.template_filter("platform_name")
+def platform_name_filter(value):
+    return PLATFORM_NAMES.get(value, value.capitalize())
+
 
 def _build_applied_set(jobs):
     """Build a set of (title, company) pairs that have been applied to,

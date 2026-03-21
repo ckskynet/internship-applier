@@ -15,7 +15,7 @@ from utils.database import (
     update_job_analysis, get_unanalyzed_jobs,
 )
 from scrapers import indeed, ziprecruiter, handshake, remoteok, weworkremotely
-from automation.applier import apply_to_job
+from automation.applier import apply_to_job, auto_apply_to_job
 from utils.discord import send_search_summary, send_application_update
 
 console = Console()
@@ -177,7 +177,40 @@ def cmd_apply():
     # Sort by AI fit score descending (unscored jobs last)
     jobs.sort(key=lambda j: j.get("ai_fit_score") or 0, reverse=True)
 
-    console.print(f"\n[bold]Found {len(jobs)} new listings to review.[/bold]\n")
+    quick_jobs = [j for j in jobs if j.get("quick_apply")]
+    manual_jobs = [j for j in jobs if not j.get("quick_apply")]
+
+    console.print(f"\n[bold]Found {len(jobs)} new listings to review.[/bold]")
+    console.print(f"  Quick-apply eligible: [green]{len(quick_jobs)}[/green]")
+    console.print(f"  Manual apply:         [yellow]{len(manual_jobs)}[/yellow]\n")
+
+    # Offer batch auto-apply for quick-apply jobs
+    if quick_jobs:
+        batch = Confirm.ask(
+            f"  Auto-submit all {len(quick_jobs)} quick-apply jobs?",
+            default=False,
+        )
+        if batch:
+            for i, job in enumerate(quick_jobs, 1):
+                if is_already_applied(job["title"], job["company"]):
+                    console.print(f"  [{i}/{len(quick_jobs)}] {job['title'][:40]} — already applied")
+                    update_job_status(job["id"], "applied", "auto-detected: already applied")
+                    continue
+                console.print(f"  [{i}/{len(quick_jobs)}] {job['title'][:40]} @ {job['company'][:20]}...", end=" ")
+                result = auto_apply_to_job(job)
+                style = "green" if result == "applied" else "red" if result == "error" else "dim"
+                console.print(f"[{style}]{result}[/{style}]")
+                send_application_update(job, result)
+            # Remove successfully submitted jobs from the review list
+            submitted_ids = {j["id"] for j in quick_jobs}
+            jobs = [j for j in jobs if j["id"] not in submitted_ids or
+                    (j.get("status") or "new") == "new"]
+            # Re-fetch to get updated statuses
+            jobs = get_jobs(status="new")
+            jobs.sort(key=lambda j: j.get("ai_fit_score") or 0, reverse=True)
+            if not jobs:
+                console.print("\n[bold green]All jobs processed![/bold green]")
+                return
 
     for i, job in enumerate(jobs, 1):
         # Check if already applied to this company+title (prevents re-applying)
@@ -225,11 +258,19 @@ def cmd_apply():
                 except (_json.JSONDecodeError, TypeError):
                     pass
 
-        action = Prompt.ask(
-            "\n  Action",
-            choices=["apply", "skip", "open", "quit"],
-            default="apply",
-        )
+        if job.get("quick_apply"):
+            console.print(f"  [green][Quick Apply eligible][/green]")
+            action = Prompt.ask(
+                "\n  Action",
+                choices=["auto", "apply", "skip", "open", "quit"],
+                default="auto",
+            )
+        else:
+            action = Prompt.ask(
+                "\n  Action",
+                choices=["apply", "skip", "open", "quit"],
+                default="apply",
+            )
 
         if action == "quit":
             break
@@ -246,6 +287,11 @@ def cmd_apply():
             update_job_status(job["id"], status)
             if status == "applied":
                 send_application_update(job, "applied")
+        elif action == "auto":
+            console.print("  [cyan]Auto-submitting application...[/cyan]")
+            result = auto_apply_to_job(job)
+            send_application_update(job, result)
+            console.print(f"  Result: [bold]{result}[/bold]")
         elif action == "apply":
             console.print("  [cyan]Opening browser and pre-filling application...[/cyan]")
             result = apply_to_job(job)
@@ -260,12 +306,18 @@ def cmd_stats():
     counts = Counter(j["status"] for j in jobs)
     platform_counts = Counter(j["platform"] for j in jobs)
 
+    quick_count = sum(1 for j in jobs if j.get("quick_apply"))
+    auto_applied = sum(1 for j in jobs if j.get("apply_method") == "auto")
+
     console.print("\n[bold]Application Stats[/bold]")
     console.print(f"  Total listings: {len(jobs)}")
     console.print(f"  New:     {counts.get('new', 0)}")
     console.print(f"  Applied: [green]{counts.get('applied', 0)}[/green]")
     console.print(f"  Skipped: [dim]{counts.get('skipped', 0)}[/dim]")
     console.print(f"  Errors:  [red]{counts.get('error', 0)}[/red]")
+    console.print()
+    console.print(f"  Quick-apply eligible: {quick_count}")
+    console.print(f"  Auto-applied: [cyan]{auto_applied}[/cyan]")
     console.print()
     console.print("[bold]By Platform[/bold]")
     for platform, count in platform_counts.items():

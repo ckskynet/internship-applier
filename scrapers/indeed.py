@@ -58,6 +58,10 @@ def scrape_listings(keyword, location, posted_within_days=7, max_pages=3):
                     loc = location_el.inner_text().strip() if location_el else ""
                     date_posted = date_el.inner_text().strip() if date_el else ""
 
+                    # Detect "Easily apply" via card text content
+                    card_text = card.inner_text().lower()
+                    is_quick = "easily apply" in card_text or "easy apply" in card_text
+
                     job = {
                         "platform": "indeed",
                         "title": title,
@@ -65,6 +69,7 @@ def scrape_listings(keyword, location, posted_within_days=7, max_pages=3):
                         "location": loc,
                         "url": href,
                         "date_posted": date_posted,
+                        "quick_apply": is_quick,
                     }
                     jobs_found.append(job)
                     insert_job(**job)

@@ -98,6 +98,195 @@ def _try_upload_cover_letter(page, cover_letter_path):
     return False
 
 
+def _fill_and_upload(page, personal, education, resume_path):
+    """Fill visible form fields and upload resume. Returns (filled_count, resume_uploaded)."""
+    inputs = page.query_selector_all(
+        'input[type="text"], input[type="email"], input[type="tel"], '
+        'input[type="url"], input:not([type])'
+    )
+    filled = 0
+    for inp in inputs:
+        if inp.is_visible():
+            if _try_fill_field(page, inp, personal, education):
+                filled += 1
+    uploaded = _try_upload_resume(page, resume_path)
+    return filled, uploaded
+
+
+def _auto_submit_indeed(page, personal, education, resume_path):
+    """Auto-submit via Indeed's Easily Apply modal. Returns True on success."""
+    apply_btn = page.query_selector(
+        '#indeedApplyButton, '
+        'button:has-text("Apply now"), '
+        'button[id*="applyButton"]'
+    )
+    if not apply_btn:
+        return False
+    apply_btn.click()
+    page.wait_for_timeout(2000)
+
+    # Loop through multi-step form (up to 10 steps)
+    for _ in range(10):
+        _fill_and_upload(page, personal, education, resume_path)
+
+        # Check for final submit button
+        submit_btn = page.query_selector(
+            'button:has-text("Submit your application"), '
+            'button:has-text("Submit application"), '
+            'button[class*="submit"]:has-text("Submit")'
+        )
+        if submit_btn and submit_btn.is_visible():
+            submit_btn.click()
+            page.wait_for_timeout(3000)
+            body = page.inner_text("body").lower()
+            return "submitted" in body or "application has been" in body
+
+        # Click Continue/Next for intermediate steps
+        continue_btn = page.query_selector(
+            'button:has-text("Continue"), button:has-text("Next")'
+        )
+        if continue_btn and continue_btn.is_visible():
+            continue_btn.click()
+            page.wait_for_timeout(1500)
+        else:
+            break
+
+    return False
+
+
+def _auto_submit_ziprecruiter(page):
+    """Auto-submit via ZipRecruiter's 1-Click Apply. Returns True on success."""
+    one_click = page.query_selector(
+        'button:has-text("1-Click Apply"), '
+        'button:has-text("One Click Apply"), '
+        '[class*="one_click"] button, '
+        '[class*="one-click"] button'
+    )
+    if not one_click:
+        return False
+    one_click.click()
+    page.wait_for_timeout(3000)
+
+    # Handle confirmation modal if it appears
+    confirm_btn = page.query_selector(
+        'button:has-text("Submit"), button:has-text("Confirm")'
+    )
+    if confirm_btn and confirm_btn.is_visible():
+        confirm_btn.click()
+        page.wait_for_timeout(2000)
+
+    body = page.inner_text("body").lower()
+    return "application" in body and ("sent" in body or "submitted" in body)
+
+
+def _auto_submit_handshake(page, resume_path):
+    """Auto-submit via Handshake's Quick Apply. Returns True on success."""
+    apply_btn = page.query_selector(
+        'button:has-text("Quick Apply"), '
+        'button:has-text("Apply"), '
+        'a:has-text("Quick Apply")'
+    )
+    if not apply_btn:
+        return False
+    apply_btn.click()
+    page.wait_for_timeout(2000)
+
+    # Upload resume if file input appears
+    _try_upload_resume(page, resume_path)
+    page.wait_for_timeout(1000)
+
+    # Click submit
+    submit_btn = page.query_selector(
+        'button:has-text("Submit Application"), '
+        'button:has-text("Submit"), '
+        'button:has-text("Apply")'
+    )
+    if submit_btn and submit_btn.is_visible():
+        submit_btn.click()
+        page.wait_for_timeout(3000)
+        body = page.inner_text("body").lower()
+        return "applied" in body or "submitted" in body or "application" in body
+
+    return False
+
+
+def auto_apply_to_job(job):
+    """Attempt auto-submit for quick-apply jobs. Falls back to manual on failure.
+
+    Returns the final status: 'applied', 'skipped', or 'error'.
+    """
+    from utils.database import update_apply_method
+
+    personal = get_personal_info()
+    education = get_education()
+    resume_path = get_resume_path()
+    platform = job["platform"]
+
+    # Handshake and ZipRecruiter need persistent contexts for auth
+    use_persistent = platform in ("handshake", "ziprecruiter")
+
+    with sync_playwright() as p:
+        if use_persistent and platform == "handshake":
+            import os
+            profile_dir = os.path.join(os.path.dirname(__file__), "..", "data", "browser_profiles", "handshake")
+            os.makedirs(profile_dir, exist_ok=True)
+            context = p.chromium.launch_persistent_context(user_data_dir=profile_dir, headless=False)
+            page = context.new_page()
+            browser = None
+        elif use_persistent and platform == "ziprecruiter":
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context(user_agent=_USER_AGENT)
+            page = context.new_page()
+            Stealth().apply_stealth_sync(page)
+        else:
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context(user_agent=_USER_AGENT)
+            page = context.new_page()
+            Stealth().apply_stealth_sync(page)
+
+        try:
+            page.goto(job["url"], wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(2000)
+
+            success = False
+            if platform == "indeed":
+                success = _auto_submit_indeed(page, personal, education, resume_path)
+            elif platform == "ziprecruiter":
+                success = _auto_submit_ziprecruiter(page)
+            elif platform == "handshake":
+                success = _auto_submit_handshake(page, resume_path)
+
+            if success:
+                update_job_status(job["id"], "applied", "auto-applied")
+                update_apply_method(job["id"], "auto")
+                return "applied"
+            else:
+                # Fall back to manual review with the open browser
+                print("  [!] Auto-submit failed — falling back to manual review...")
+                _fill_and_upload(page, personal, education, resume_path)
+                print("  Browser is open — review and submit manually.")
+                print("  Press Enter when done (or type 'skip')...")
+                user_input = input("  > ").strip().lower()
+                if user_input == "skip":
+                    update_job_status(job["id"], "skipped")
+                    return "skipped"
+                else:
+                    update_job_status(job["id"], "applied")
+                    update_apply_method(job["id"], "manual")
+                    return "applied"
+
+        except Exception as e:
+            print(f"  Auto-apply error: {e}")
+            update_job_status(job["id"], "error", f"auto-apply failed: {e}")
+            return "error"
+
+        finally:
+            if browser:
+                browser.close()
+            else:
+                context.close()
+
+
 def apply_to_job(job):
     """Open a job listing, pre-fill the application, and wait for user review.
 

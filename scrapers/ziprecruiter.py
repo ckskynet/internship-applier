@@ -122,12 +122,17 @@ def scrape_listings(keyword, location, posted_within_days=7, max_pages=3):
                     if not href:
                         continue
 
+                    # Detect "1-Click Apply" via card text content
+                    card_text = card.inner_text().lower()
+                    is_quick = "1-click apply" in card_text or "one click apply" in card_text
+
                     job = {
                         "platform": "ziprecruiter",
                         "title": title,
                         "company": company,
                         "location": loc,
                         "url": href,
+                        "quick_apply": is_quick,
                     }
                     jobs_found.append(job)
                     insert_job(**job)

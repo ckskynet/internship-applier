@@ -35,15 +35,19 @@ def init_db():
             ai_fit_score INTEGER,
             ai_recommendation TEXT,
             ai_summary TEXT,
-            ai_talking_points TEXT
+            ai_talking_points TEXT,
+            quick_apply INTEGER DEFAULT 0,
+            apply_method TEXT
         )
     """)
-    # Add AI columns to existing databases
+    # Add columns to existing databases
     for col, col_type in [
         ("ai_fit_score", "INTEGER"),
         ("ai_recommendation", "TEXT"),
         ("ai_summary", "TEXT"),
         ("ai_talking_points", "TEXT"),
+        ("quick_apply", "INTEGER DEFAULT 0"),
+        ("apply_method", "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {col_type}")
@@ -74,12 +78,16 @@ def _normalize_url(url):
     return url
 
 
-def _is_duplicate(conn, platform, title, company):
-    """Check if we already have a job with the same title+company (catches URL variants)."""
+def _is_duplicate(conn, platform, title, company, quick_apply=False):
+    """Check if we already have a job with the same title+company (catches URL variants).
+    If found and quick_apply is True, update the existing row's flag."""
     row = conn.execute(
         "SELECT id FROM jobs WHERE platform = ? AND LOWER(title) = LOWER(?) AND LOWER(company) = LOWER(?)",
         (platform, title, company),
     ).fetchone()
+    if row and quick_apply:
+        conn.execute("UPDATE jobs SET quick_apply = 1 WHERE id = ?", (row["id"],))
+        conn.commit()
     return row is not None
 
 
@@ -95,20 +103,28 @@ def _is_excluded_title(title):
         return False
 
 
-def insert_job(platform, title, company, location, url, description="", date_posted=""):
+def _is_internship(title):
+    """Check if a job title indicates an internship position."""
+    title_lower = title.lower()
+    return any(kw in title_lower for kw in ("intern", "internship", "co-op", "coop"))
+
+
+def insert_job(platform, title, company, location, url, description="", date_posted="", quick_apply=False):
+    if not _is_internship(title):
+        return
     if _is_excluded_title(title):
         return
     conn = get_connection()
     try:
         url = _normalize_url(url)
-        if _is_duplicate(conn, platform, title, company):
+        if _is_duplicate(conn, platform, title, company, quick_apply=quick_apply):
             return
         conn.execute(
             """INSERT OR IGNORE INTO jobs
-               (platform, title, company, location, url, description, date_posted, date_scraped)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (platform, title, company, location, url, description, date_posted, date_scraped, quick_apply)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (platform, title, company, location, url, description, date_posted,
-             datetime.now().isoformat()),
+             datetime.now().isoformat(), int(quick_apply)),
         )
         conn.commit()
     finally:
@@ -244,3 +260,11 @@ def get_unanalyzed_jobs():
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def update_apply_method(job_id, method):
+    """Record how a job was applied to ('auto' or 'manual')."""
+    conn = get_connection()
+    conn.execute("UPDATE jobs SET apply_method = ? WHERE id = ?", (method, job_id))
+    conn.commit()
+    conn.close()

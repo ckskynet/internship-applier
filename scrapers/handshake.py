@@ -75,10 +75,14 @@ def scrape_listings(keyword, location="", posted_within_days=7, max_pages=5):
                     }
                     const text = container ? container.innerText : '';
                     const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+                    const hasQuickApply = text.toLowerCase().includes('quick apply')
+                        || text.toLowerCase().includes('apply on handshake')
+                        || !!container.querySelector('button[aria-label*="Quick Apply"]');
                     return {
                         href: a.href,
                         ariaLabel: a.getAttribute('aria-label') || '',
                         lines: lines,
+                        quickApply: hasQuickApply,
                     };
                 });
             }''')
@@ -125,6 +129,7 @@ def scrape_listings(keyword, location="", posted_within_days=7, max_pages=5):
                         "company": company,
                         "location": loc,
                         "url": href,
+                        "quick_apply": card.get("quickApply", False),
                     }
                     jobs_found.append(job)
                     insert_job(**job)
