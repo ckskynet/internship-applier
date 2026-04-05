@@ -27,8 +27,8 @@ Create `config/profile.yaml` with your personal info, search preferences, and en
 
 ```yaml
 personal:
-  first_name: "Chris"
-  last_name: "Adams"
+  first_name: "John"
+  last_name: "Smith"
   email: "you@example.com"
   phone: "555-555-5555"
   location: "United States"
